@@ -1,0 +1,3 @@
+# Valkyrie Myth.cool water pump controller
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0416", ATTRS{idProduct}=="5201", MODE="0666", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0416", ATTRS{idProduct}=="5201", MODE="0666", GROUP="plugdev"

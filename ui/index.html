@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<link rel="icon" href="data:,"/>
+<title>VALKYRIE C360 // 水冷控制终端</title>
+<link rel="preconnect" href="https://fonts.loli.net"/>
+<link rel="preconnect" href="https://gstatic.loli.net" crossorigin=""/>
+<link href="https://fonts.loli.net/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#0a0a0b;
+  --panel:#101013;
+  --panel2:#15151a;
+  --line:#26262c;
+  --line2:#3c3c44;
+  --orange:#ff4d00;
+  --amber:#ffb000;
+  --red:#ff2e2e;
+  --green:#3ddc74;
+  --text:#e5e7eb;
+  --dim:#9ca3af;
+  --faint:#6b7280;
+  --mono:'IBM Plex Mono','Noto Sans SC',ui-monospace,monospace;
+  --disp:'Anton','Noto Sans SC',ui-sans-serif,sans-serif;
+  --cut:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px));
+  --cut-sm:polygon(0 0,calc(100% - 9px) 0,100% 9px,100% 100%,9px 100%,0 calc(100% - 9px));
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{background:var(--bg)}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--mono);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+/* 背景网格 grid backdrop */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px),
+    linear-gradient(0deg,rgba(255,255,255,.025) 1px,transparent 1px);
+  background-size:44px 44px;
+}
+/* 扫描线 scanlines */
+body::after{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:60;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px);
+  mix-blend-mode:multiply;
+}
+/* 移动扫描线 sweeping line */
+.sweep{position:fixed;left:0;right:0;height:2px;z-index:61;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(255,77,0,.14),transparent);
+  animation:sweep 9s linear infinite;}
+@keyframes sweep{0%{top:-2%}100%{top:102%}}
+
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:26px 26px 40px}
+
+/* ============ 顶栏 header ============ */
+header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:14px}
+.mark{width:40px;height:40px;background:var(--orange);clip-path:var(--cut-sm);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--disp);font-size:24px;color:#0a0a0b;}
+.title{font-family:var(--disp);font-size:24px;letter-spacing:.06em;line-height:1;
+  animation:flicker 1.2s steps(1) 1;}
+.title small{display:block;font-family:var(--mono);font-size:10px;font-weight:400;
+  letter-spacing:.32em;color:var(--faint);margin-top:5px}
+.status{text-align:right;font-size:11px}
+.status .lbl{font-size:9px;letter-spacing:.3em;color:var(--faint)}
+.status .val{display:flex;align-items:center;gap:8px;justify-content:flex-end;
+  font-size:13px;font-weight:600;letter-spacing:.12em;margin-top:4px}
+.dot{width:8px;height:8px;display:inline-block;animation:blink 1.6s steps(1) infinite}
+.dot.on{background:var(--green)} .dot.off{background:var(--red)} .dot.wait{background:var(--amber)}
+@keyframes blink{0%,70%{opacity:1}71%,100%{opacity:.25}}
+.status .ids{font-size:9px;color:var(--faint);margin-top:4px;letter-spacing:.08em}
+
+/* 警示条纹 hazard stripe */
+.hazard{height:6px;margin:18px 0 22px;opacity:.7;
+  background:repeating-linear-gradient(45deg,var(--orange) 0 12px,transparent 12px 24px);}
+
+/* ============ 布局 grid ============ */
+.grid{display:grid;grid-template-columns:1.25fr 1fr;gap:20px}
+@media(max-width:920px){.grid{grid-template-columns:1fr}}
+
+.sec{font-size:10px;letter-spacing:.32em;color:var(--dim);margin:0 0 10px 2px}
+.sec b{color:var(--orange);font-weight:600}
+
+/* 切角卡片 cut-corner card */
+.frame{background:var(--line2);clip-path:var(--cut);padding:1px;animation:flicker .9s steps(1) 1}
+.frame>.in{background:var(--panel);clip-path:var(--cut);padding:20px 22px;height:100%}
+@keyframes flicker{0%{opacity:0}18%{opacity:.5}30%{opacity:.15}55%{opacity:.8}70%{opacity:.4}100%{opacity:1}}
+
+.klabel{font-size:10px;letter-spacing:.28em;color:var(--faint)}
+.klabel i{font-style:normal;color:var(--orange)}
+
+/* 温度读数 temperature readout */
+.temp-row{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-top:10px}
+.temp-val{font-family:var(--disp);font-size:clamp(72px,10vw,118px);line-height:.95;
+  color:var(--orange);letter-spacing:.01em;transition:color .4s}
+.temp-val .unit{font-size:.32em;color:var(--dim);margin-left:6px;letter-spacing:.06em}
+.temp-meta{text-align:right;font-size:10px;color:var(--faint);letter-spacing:.14em;line-height:1.9}
+.temp-meta b{color:var(--dim);font-weight:500}
+
+/* 分段进度条 segmented bar */
+.segbar{height:10px;background:#1a1a20;margin-top:12px;position:relative;overflow:hidden}
+.segbar>.fill{height:100%;width:0%;transition:width .8s cubic-bezier(.2,.8,.2,1),background-color .4s;
+  background:repeating-linear-gradient(90deg,var(--orange) 0 8px,rgba(255,77,0,.15) 8px 11px);}
+.segbar.rpm{height:7px;margin-top:10px}
+.segbar.rpm>.fill{background:repeating-linear-gradient(90deg,#c2410c 0 6px,rgba(255,77,0,.12) 6px 9px)}
+.scale{display:flex;justify-content:space-between;font-size:9px;color:var(--faint);margin-top:6px;letter-spacing:.1em}
+
+/* RPM 三通道 rpm tiles */
+.rpm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}
+@media(max-width:520px){.rpm-grid{grid-template-columns:1fr}}
+.rpm .frame{animation:none}
+.rpm .in{background:var(--panel2);padding:14px 14px 13px}
+.rpm .tag{font-size:9px;letter-spacing:.22em;color:var(--faint);display:flex;justify-content:space-between}
+.rpm .tag i{font-style:normal;color:var(--orange)}
+.rpm .val{font-size:27px;font-weight:600;margin-top:8px;letter-spacing:.02em}
+.rpm .val small{font-size:10px;color:var(--faint);margin-left:5px;letter-spacing:.18em}
+
+/* ============ 控制 control ============ */
+.speed-head{display:flex;align-items:flex-end;justify-content:space-between;margin-top:10px}
+.speed-val{font-family:var(--disp);font-size:76px;line-height:.95;color:var(--text)}
+.speed-val .pct{font-size:.4em;color:var(--orange);margin-left:2px}
+
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:26px;background:transparent;margin-top:14px;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:4px;background:var(--line)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+  width:16px;height:16px;margin-top:-6px;background:var(--orange);
+  border:1px solid #000;box-shadow:0 0 0 1px var(--orange);cursor:grab}
+input[type=range]::-moz-range-track{height:4px;background:var(--line)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:0;
+  background:var(--orange);border:1px solid #000;box-shadow:0 0 0 1px var(--orange);cursor:grab}
+input[type=range]:disabled{opacity:.35;cursor:not-allowed}
+
+.presets{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:18px}
+@media(max-width:520px){.presets{grid-template-columns:repeat(2,1fr)}}
+.preset{font-family:var(--mono);background:var(--panel2);color:var(--dim);
+  border:1px solid var(--line);clip-path:var(--cut-sm);
+  padding:9px 2px 8px;cursor:pointer;transition:all .15s;text-align:center}
+.preset .zh{font-size:12px;color:var(--text);display:block}
+.preset .en{font-size:8px;letter-spacing:.14em;display:block;margin-top:3px}
+.preset:hover:not(:disabled){border-color:var(--orange);color:var(--orange)}
+.preset:hover:not(:disabled) .zh{color:var(--orange)}
+.preset.active{background:var(--orange);border-color:var(--orange)}
+.preset.active .zh,.preset.active .en{color:#0a0a0b}
+.preset:disabled{opacity:.35;cursor:not-allowed}
+
+.apply{width:100%;margin-top:18px;padding:15px 0 14px;border:none;cursor:pointer;
+  background:var(--orange);color:#0a0a0b;clip-path:var(--cut);
+  font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:.3em;
+  transition:filter .15s;position:relative;overflow:hidden}
+.apply:hover:not(:disabled){filter:brightness(1.15)}
+.apply:active:not(:disabled){filter:brightness(.9)}
+.apply:disabled{opacity:.45;cursor:not-allowed}
+.apply .zh{letter-spacing:.5em}
+
+.foot{margin-top:26px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  font-size:9px;letter-spacing:.22em;color:var(--faint)}
+.cursor::after{content:"_";color:var(--orange);animation:blink 1s steps(1) infinite}
+
+.offline .controls{opacity:.35;pointer-events:none;filter:grayscale(.4)}
+</style>
+</head>
+<body>
+<div class="sweep"></div>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="mark">V</div>
+      <div class="title">VALKYRIE C360
+        <small>COOLING CONTROL TERMINAL // 水冷控制终端</small>
+      </div>
+    </div>
+    <div class="status">
+      <div class="lbl">LINK STATUS // 链路状态</div>
+      <div class="val" id="statusVal"><span class="dot wait"></span><span id="statusText" style="color:var(--amber)">LINK… 连接中</span></div>
+      <div class="ids">HID 0416:5201 · CH×3 · PWM 0-100%</div>
+    </div>
+  </header>
+
+  <div class="hazard"></div>
+
+  <div class="grid">
+    <!-- ============ 监控 ============ -->
+    <section>
+      <p class="sec"><b>//</b> SYSTEM MONITOR 系统监控</p>
+      <div class="frame"><div class="in">
+        <div class="klabel"><i>▸</i> COOLANT TEMP 冷却液温度</div>
+        <div class="temp-row">
+          <div class="temp-val" id="tempVal">--<span class="unit">°C</span></div>
+          <div class="temp-meta">
+            NORMAL 正常 <b>60 — 150°C</b><br/>
+            SAMPLE 采样 <b>2.0s</b><br/>
+            MODE 模式 <b>MANUAL 手动</b>
+          </div>
+        </div>
+        <div class="segbar"><div class="fill" id="tempBar"></div></div>
+        <div class="scale"><span>40°</span><span>100°</span><span>160°</span></div>
+
+        <div class="rpm-grid">
+          <div class="rpm"><div class="frame"><div class="in">
+            <div class="tag"><span><i>CH-1</i> PUMP</span><span>水泵</span></div>
+            <div class="val" id="pumpVal">----<small>RPM</small></div>
+            <div class="segbar rpm"><div class="fill" id="pumpBar"></div></div>
+          </div></div></div>
+          <div class="rpm"><div class="frame"><div class="in">
+            <div class="tag"><span><i>CH-2</i> FAN-1</span><span>风扇1</span></div>
+            <div class="val" id="fan1Val">----<small>RPM</small></div>
+            <div class="segbar rpm"><div class="fill" id="fan1Bar"></div></div>
+          </div></div></div>
+          <div class="rpm"><div class="frame"><div class="in">
+            <div class="tag"><span><i>CH-3</i> FAN-2</span><span>风扇2</span></div>
+            <div class="val" id="fan2Val">----<small>RPM</small></div>
+            <div class="segbar rpm"><div class="fill" id="fan2Bar"></div></div>
+          </div></div></div>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- ============ 控制 ============ -->
+    <section>
+      <p class="sec"><b>//</b> SPEED CONTROL 转速控制</p>
+      <div class="frame"><div class="in controls" id="controls">
+        <div class="klabel"><i>▸</i> TARGET OUTPUT 目标输出</div>
+        <div class="speed-head">
+          <div class="speed-val"><span id="speedVal">50</span><span class="pct">%</span></div>
+        </div>
+
+        <input type="range" id="slider" min="0" max="100" step="1" value="50"/>
+        <div class="scale"><span>0</span><span>PWM DUTY</span><span>100</span></div>
+
+        <div class="presets">
+          <button class="preset" data-speed="30"><span class="zh">安静</span><span class="en">SILENT·30</span></button>
+          <button class="preset active" data-speed="50"><span class="zh">平衡</span><span class="en">BALANCED·50</span></button>
+          <button class="preset" data-speed="75"><span class="zh">性能</span><span class="en">PERF·75</span></button>
+          <button class="preset" data-speed="100"><span class="zh">满速</span><span class="en">MAX·100</span></button>
+        </div>
+
+        <button class="apply" id="applyBtn"><span class="zh">应用设置</span>&nbsp;&nbsp;APPLY ▸</button>
+      </div></div>
+    </section>
+  </div>
+
+  <div class="foot">
+    <span class="cursor">VALKYRIE C360 // LINUX CONTROL TERMINAL v1.0</span>
+    <span>MYTH.COOL CONTROLLER // HID RAW PROTOCOL</span>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const PRESET_SPEEDS = [30, 50, 75, 100];
+const MAX_RPM = 2000, TEMP_LO = 40, TEMP_HI = 160;
+let applying = false, currentSpeed = 50;
+
+/* ---- 温度配色 temp color (正常 60-150°C) ---- */
+function tempColor(t){
+  if (t < 120) return 'var(--orange)';
+  if (t <= 150) return 'var(--amber)';
+  return 'var(--red)';
+}
+
+/* ---- 状态渲染 render status ---- */
+function render(d){
+  const online = !!d.connected;
+  document.body.classList.toggle('offline', !online);
+
+  const dot = $('#statusVal .dot'), txt = $('#statusText');
+  dot.className = 'dot ' + (online ? 'on' : 'off');
+  txt.textContent = online ? 'ONLINE 已连接' : 'OFFLINE 未连接';
+  txt.style.color = online ? 'var(--green)' : 'var(--red)';
+
+  if (online && d.temp_c != null){
+    const c = tempColor(d.temp_c);
+    $('#tempVal').innerHTML = d.temp_c.toFixed(1) + '<span class="unit">°C</span>';
+    $('#tempVal').style.color = c;
+    const frac = Math.min(Math.max((d.temp_c - TEMP_LO) / (TEMP_HI - TEMP_LO), 0), 1);
+    const bar = $('#tempBar');
+    bar.style.width = (frac * 100).toFixed(1) + '%';
+    bar.style.background = `repeating-linear-gradient(90deg, ${c} 0 8px, rgba(255,77,0,.15) 8px 11px)`;
+
+    setRpm('#pumpVal', '#pumpBar', d.pump_rpm);
+    setRpm('#fan1Val', '#fan1Bar', d.fan1_rpm);
+    setRpm('#fan2Val', '#fan2Bar', d.fan2_rpm);
+  } else {
+    $('#tempVal').innerHTML = '--<span class="unit">°C</span>';
+    $('#tempVal').style.color = 'var(--faint)';
+    $('#tempBar').style.width = '0%';
+    setRpm('#pumpVal', '#pumpBar', null);
+    setRpm('#fan1Val', '#fan1Bar', null);
+    setRpm('#fan2Val', '#fan2Bar', null);
+  }
+}
+
+function setRpm(valSel, barSel, rpm){
+  $(valSel).innerHTML = (rpm == null ? '----' : rpm) + '<small>RPM</small>';
+  $(barSel).style.width = rpm == null ? '0%' : Math.min(rpm / MAX_RPM * 100, 100).toFixed(1) + '%';
+}
+
+/* ---- 轮询 polling ---- */
+async function poll(){
+  try {
+    const r = await fetch('/api/status');
+    render(await r.json());
+  } catch (e) {
+    render({connected:false});
+  }
+}
+
+/* ---- 转速下发 apply speed ---- */
+async function postSpeed(v){
+  if (applying) return;
+  applying = true;
+  const btn = $('#applyBtn');
+  btn.disabled = true;
+  btn.innerHTML = 'TRANSMITTING 传输中…';
+  try {
+    await fetch('/api/speed', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({speed:v})
+    });
+  } catch(e) {}
+  btn.disabled = false;
+  btn.innerHTML = '<span class="zh">应用设置</span>&nbsp;&nbsp;APPLY ▸';
+  applying = false;
+}
+
+/* ---- 控件事件 widget events ---- */
+function syncPresets(v){
+  document.querySelectorAll('.preset').forEach(b => {
+    b.classList.toggle('active', +b.dataset.speed === v);
+  });
+}
+$('#slider').addEventListener('input', e => {
+  currentSpeed = +e.target.value;
+  $('#speedVal').textContent = currentSpeed;
+  syncPresets(currentSpeed);
+});
+document.querySelectorAll('.preset').forEach(b => {
+  b.addEventListener('click', () => {
+    currentSpeed = +b.dataset.speed;
+    $('#slider').value = currentSpeed;
+    $('#speedVal').textContent = currentSpeed;
+    syncPresets(currentSpeed);
+    postSpeed(currentSpeed);
+  });
+});
+$('#applyBtn').addEventListener('click', () => postSpeed(currentSpeed));
+
+poll();
+setInterval(poll, 2000);
+</script>
+</body>
+</html>

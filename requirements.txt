@@ -1,0 +1,2 @@
+hidapi>=0.14.0
+pywebview>=5.0.0   # 原生窗口 (Linux 需要系统 WebKit2GTK + PyGObject)
