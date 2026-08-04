@@ -36,6 +36,7 @@ class Cooler:
     def __init__(self):
         self.lock = threading.Lock()
         self.device = None
+        self.interval = 2.0  # 采样间隔（秒） Poll interval in seconds
         self.data = {
             "connected": False,
             "temp_c": None,
@@ -135,7 +136,7 @@ class Cooler:
     def monitor_loop(self):
         while True:
             self.poll_sensors()
-            time.sleep(2)
+            time.sleep(self.interval)
 
     def start_monitor(self):
         t = threading.Thread(target=self.monitor_loop, daemon=True)
@@ -181,25 +182,38 @@ class Handler(BaseHTTPRequestHandler):
             self._send_file(UI_DIR / "index.html")
         elif self.path == "/api/status":
             self._send_json(self.cooler.data)
+        elif self.path == "/api/config":
+            self._send_json({"interval": self.cooler.interval})
         else:
             self._send_json({"ok": False, "error": "not found"}, 404)
 
+    def _read_json(self):
+        length = int(self.headers.get("Content-Length", 0))
+        return json.loads(self.rfile.read(length) or b"{}")
+
     def do_POST(self):
-        if self.path != "/api/speed":
+        if self.path == "/api/speed":
+            try:
+                speed = int(self._read_json()["speed"])
+            except Exception:
+                self._send_json({"ok": False, "error": "bad request"}, 400)
+                return
+            try:
+                self.cooler.set_speed(speed)
+                self._send_json({"ok": True, "speed": max(0, min(100, speed))})
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, 500)
+        elif self.path == "/api/config":
+            try:
+                interval = float(self._read_json()["interval"])
+            except Exception:
+                self._send_json({"ok": False, "error": "bad request"}, 400)
+                return
+            # 采样间隔限制在 0.3-10 秒 Clamp poll interval to 0.3-10s
+            self.cooler.interval = max(0.3, min(10.0, interval))
+            self._send_json({"ok": True, "interval": self.cooler.interval})
+        else:
             self._send_json({"ok": False, "error": "not found"}, 404)
-            return
-        try:
-            length = int(self.headers.get("Content-Length", 0))
-            payload = json.loads(self.rfile.read(length) or b"{}")
-            speed = int(payload["speed"])
-        except Exception:
-            self._send_json({"ok": False, "error": "bad request"}, 400)
-            return
-        try:
-            self.cooler.set_speed(speed)
-            self._send_json({"ok": True, "speed": max(0, min(100, speed))})
-        except Exception as e:
-            self._send_json({"ok": False, "error": str(e)}, 500)
 
 
 def main():
@@ -221,8 +235,8 @@ def main():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     window = webview.create_window(
         "VALKYRIE C360 // 水冷控制终端",
-        url, width=1180, height=860, min_size=(960, 720),
-        background_color="#0a0a0b")
+        url, width=1280, height=900, min_size=(1000, 760),
+        background_color="#e0e5ec")
     try:
         webview.start()
     except KeyboardInterrupt:
